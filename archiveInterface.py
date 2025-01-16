@@ -8,6 +8,7 @@ import concurrent.futures
 import logging
 from typing import Dict, Any
 import time
+import threading
 
 class QuickbaseArchiveApp(tk.Tk):
     def __init__(self):
@@ -227,9 +228,13 @@ class QuickbaseArchiveApp(tk.Tk):
         self.create_url_fields_tab()
         self.create_delete_tab()
 
-        # Add state variables for control
-        self.is_paused = False
-        self.should_cancel = False
+        # Replace boolean flags with Events for better control
+        self.pause_event = threading.Event()
+        self.cancel_event = threading.Event()
+        
+        # Initialize events as cleared
+        self.pause_event.clear()
+        self.cancel_event.clear()
 
         # Now update the entry borders after shared_entries is initialized
         for entry in self.shared_entries.values():
@@ -581,9 +586,9 @@ class QuickbaseArchiveApp(tk.Tk):
         return {key: entry.get() for key, entry in self.shared_entries.items()}
 
     def run_upload(self):
-        # Reset control flags
-        self.is_paused = False
-        self.should_cancel = False
+        # Reset control events
+        self.pause_event.clear()
+        self.cancel_event.clear()
         
         creds = self.get_credentials()
         bucket_name = self.bucket_entry.get()
@@ -653,7 +658,7 @@ class QuickbaseArchiveApp(tk.Tk):
                         control_callback=self.check_controls
                     )
                     
-                    if self.should_cancel:
+                    if self.cancel_event.is_set():
                         logging.warning("Upload cancelled")
                     else:
                         logging.info(f"Archive completed. Total files uploaded: {total_files}")
@@ -811,25 +816,33 @@ class QuickbaseArchiveApp(tk.Tk):
             raise
 
     def toggle_pause(self):
-        """Toggle pause state"""
-        self.is_paused = not self.is_paused
-        self.pause_button.configure(text="Resume" if self.is_paused else "Pause")
-        if self.is_paused:
-            logging.info("Upload paused")
-        else:
+        """Toggle pause state with immediate effect"""
+        if self.pause_event.is_set():
+            self.pause_event.clear()
+            self.pause_button.configure(text="Pause")
             logging.info("Upload resumed")
+        else:
+            self.pause_event.set()
+            self.pause_button.configure(text="Resume")
+            logging.info("Upload paused")
 
     def cancel_upload(self):
-        """Cancel the upload process"""
-        self.should_cancel = True
-        self.is_paused = False
+        """Cancel the upload process with immediate effect"""
+        self.cancel_event.set()
+        self.pause_event.clear()  # Clear pause if set
         logging.warning("Cancelling upload...")
 
     def check_controls(self):
         """Check if process should pause or cancel"""
-        while self.is_paused and not self.should_cancel:
-            time.sleep(0.1)  # Prevent CPU hogging
-        return self.should_cancel
+        if self.cancel_event.is_set():
+            return True
+        
+        if self.pause_event.is_set():
+            # Wait until resumed or cancelled
+            while self.pause_event.is_set() and not self.cancel_event.is_set():
+                time.sleep(0.1)  # Prevent CPU hogging
+            
+        return self.cancel_event.is_set()
 
     def create_delete_tab(self):
         frame = ttk.Frame(self.delete_tab, padding=20)
