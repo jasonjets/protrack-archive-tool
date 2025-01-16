@@ -8,7 +8,6 @@ import concurrent.futures
 import logging
 from typing import Dict, Any
 import time
-import sys
 
 class QuickbaseArchiveApp(tk.Tk):
     def __init__(self):
@@ -16,22 +15,19 @@ class QuickbaseArchiveApp(tk.Tk):
         self.title("ProTrack Archive Tool")
         self.geometry("1200x800")  # Larger default size
         
-        # Add dark title bar (platform specific)
+        # Add dark title bar (Windows only)
         try:
-            if sys.platform == "darwin":  # macOS
-                self.tk.call('::tk::unsupported::MacWindowStyle', 'style', self.winfo_id(), 'dark')
-            elif sys.platform == "win32":  # Windows
-                # Windows-specific dark title bar
-                from ctypes import windll, byref, sizeof, c_int
-                DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-                windll.dwmapi.DwmSetWindowAttribute(
-                    self.winfo_id(), 
-                    DWMWA_USE_IMMERSIVE_DARK_MODE,
-                    byref(c_int(2)), 
-                    sizeof(c_int)
-                )
+            # Windows-specific dark title bar
+            from ctypes import windll, byref, sizeof, c_int
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+            windll.dwmapi.DwmSetWindowAttribute(
+                self.winfo_id(), 
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                byref(c_int(2)), 
+                sizeof(c_int)
+            )
         except:
-            pass  # Silently fail if customization is not supported
+            pass  # Silently fail on other operating systems
         
         # Modern color scheme with softer colors
         self.COLORS = {
@@ -180,6 +176,18 @@ class QuickbaseArchiveApp(tk.Tk):
             foreground=[('active', self.COLORS['text'])]
         )
 
+        # Update the entry style for better borders
+        self.style.configure(
+            'TEntry',
+            fieldbackground=self.COLORS['secondary'],
+            foreground=self.COLORS['text'],
+            bordercolor=self.COLORS['border'],
+            darkcolor=self.COLORS['border'],
+            lightcolor=self.COLORS['border'],
+            selectbackground=self.COLORS['primary'],
+            selectforeground=self.COLORS['text']
+        )
+
         # Update all remaining border colors
         self.style.configure('TSeparator',
             background=self.COLORS['separator']
@@ -190,6 +198,62 @@ class QuickbaseArchiveApp(tk.Tk):
             bordercolor=self.COLORS['border'],
             darkcolor=self.COLORS['border'],
             lightcolor=self.COLORS['border']
+        )
+
+        # Create and pack the main container
+        self.main_container = ttk.Frame(self)
+        self.main_container.pack(expand=True, fill="both", padx=20, pady=20)
+
+        # Create notebook with modern styling
+        self.notebook = ttk.Notebook(self.main_container)
+        self.notebook.pack(expand=True, fill="both")
+
+        # Initialize tabs
+        self.upload_tab = ttk.Frame(self.notebook)
+        self.url_fields_tab = ttk.Frame(self.notebook)
+        self.delete_tab = ttk.Frame(self.notebook)
+        
+        self.notebook.add(self.upload_tab, text="Upload Files")
+        self.notebook.add(self.url_fields_tab, text="Create URL Fields")
+        self.notebook.add(self.delete_tab, text="Delete Files")
+
+        # Initialize shared_entries before using it
+        self.shared_entries = {}
+        self.show_buttons = {}
+
+        # Initialize components
+        self.create_shared_credentials_frame()
+        self.create_upload_tab()
+        self.create_url_fields_tab()
+        self.create_delete_tab()
+
+        # Add state variables for control
+        self.is_paused = False
+        self.should_cancel = False
+
+        # Now update the entry borders after shared_entries is initialized
+        for entry in self.shared_entries.values():
+            entry.configure(
+                highlightbackground=self.COLORS['border'],
+                highlightcolor=self.COLORS['primary'],
+                highlightthickness=1,
+                bd=0
+            )
+
+        # Update Notebook selected tab appearance
+        self.style.map('TNotebook.Tab',
+            background=[
+                ('selected', self.COLORS['secondary']),
+                ('active', self.COLORS['primary'])
+            ],
+            foreground=[
+                ('selected', self.COLORS['text']),
+                ('active', self.COLORS['text'])
+            ],
+            bordercolor=[
+                ('selected', self.COLORS['primary']),
+                ('active', self.COLORS['border'])
+            ]
         )
 
         # Update button borders
@@ -229,59 +293,17 @@ class QuickbaseArchiveApp(tk.Tk):
             background=[('active', self.COLORS['primary'])]
         )
 
-        # Create and pack the main container
-        self.main_container = ttk.Frame(self)
-        self.main_container.pack(expand=True, fill="both", padx=20, pady=20)
-
-        # Create notebook with modern styling
-        self.notebook = ttk.Notebook(self.main_container)
-        self.notebook.pack(expand=True, fill="both")
-
-        # Initialize tabs
-        self.upload_tab = ttk.Frame(self.notebook)
-        self.url_fields_tab = ttk.Frame(self.notebook)
-        self.delete_tab = ttk.Frame(self.notebook)
-        
-        self.notebook.add(self.upload_tab, text="Upload Files")
-        self.notebook.add(self.url_fields_tab, text="Create URL Fields")
-        self.notebook.add(self.delete_tab, text="Delete Files")
-
-        # Initialize components
-        self.create_shared_credentials_frame()
-        self.create_upload_tab()
-        self.create_url_fields_tab()
-        self.create_delete_tab()
-
-        # Add state variables for control
-        self.is_paused = False
-        self.should_cancel = False
-
     def create_shared_credentials_frame(self):
         # Create a simple frame without scrolling
         cred_frame = ttk.LabelFrame(
             self.main_container,
             text="Credentials",
             padding=15,
-            style='Custom.TLabelframe'
+            style='Custom.TLabelframe'  # Add custom style
         )
         cred_frame.pack(fill="x", pady=(0, 10))
 
         # Streamlined credentials setup
-        self.shared_entries = {}
-        self.show_buttons = {}  # Store show/hide buttons
-        
-        # Configure entry style before creating entries
-        self.style.configure(
-            'TEntry',
-            fieldbackground=self.COLORS['secondary'],
-            foreground=self.COLORS['text'],
-            bordercolor=self.COLORS['border'],
-            darkcolor=self.COLORS['border'],
-            lightcolor=self.COLORS['border'],
-            selectbackground=self.COLORS['primary'],
-            selectforeground=self.COLORS['text']
-        )
-
         shared_fields = [
             ("AWS Access Key:", "aws_access_key", False, "AKIAXR5GICGZ6SD2QUXY"),
             ("AWS Secret Key:", "aws_secret_key", True, "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"),
@@ -330,15 +352,6 @@ class QuickbaseArchiveApp(tk.Tk):
                 self.show_buttons[field_key] = (show_button, show_var)
 
         cred_frame.columnconfigure(1, weight=1)
-        
-        # Update entry borders after creating them
-        for entry in self.shared_entries.values():
-            entry.configure(
-                highlightbackground=self.COLORS['border'],
-                highlightcolor=self.COLORS['primary'],
-                highlightthickness=1,
-                bd=0
-            )
 
     def toggle_show_password(self, entry_widget, show_var):
         """Toggle between showing and hiding the password"""
