@@ -64,7 +64,7 @@ def createUrlFields(aws_access_key, aws_secret_key, qb_realm_hostname, qb_user_t
 class QuickbaseApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Quickbase Archive URL Fields")
+        self.title("ProTrack Archive URL Fields")
         self.geometry("500x400")
         self.configure(bg="#f0f0f0")
 

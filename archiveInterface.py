@@ -8,19 +8,30 @@ import concurrent.futures
 import logging
 from typing import Dict, Any
 import time
+import sys
 
 class QuickbaseArchiveApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Quickbase Archive Tool")
+        self.title("ProTrack Archive Tool")
         self.geometry("1200x800")  # Larger default size
         
-        # Enable transparency (Windows only)
+        # Add dark title bar (platform specific)
         try:
-            # This only works on Windows
-            self.attributes('-alpha', 0.90)  # 90% opacity
+            if sys.platform == "darwin":  # macOS
+                self.tk.call('::tk::unsupported::MacWindowStyle', 'style', self.winfo_id(), 'dark')
+            elif sys.platform == "win32":  # Windows
+                # Windows-specific dark title bar
+                from ctypes import windll, byref, sizeof, c_int
+                DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+                windll.dwmapi.DwmSetWindowAttribute(
+                    self.winfo_id(), 
+                    DWMWA_USE_IMMERSIVE_DARK_MODE,
+                    byref(c_int(2)), 
+                    sizeof(c_int)
+                )
         except:
-            pass  # Silently fail on other operating systems
+            pass  # Silently fail if customization is not supported
         
         # Modern color scheme with softer colors
         self.COLORS = {
@@ -32,7 +43,9 @@ class QuickbaseArchiveApp(tk.Tk):
             'success': '#c3e88d',      # Soft green for success
             'warning': '#ffcb6b',      # Soft yellow for warnings
             'info': '#82aaff',         # Soft blue for info
-            'timestamp': '#808080'     # Gray for timestamps
+            'timestamp': '#808080',    # Gray for timestamps
+            'border': '#404040',       # Lighter gray for borders
+            'separator': '#404040'     # Color for separators/borders
         }
         
         # Center the window on screen
@@ -73,19 +86,27 @@ class QuickbaseArchiveApp(tk.Tk):
         self.style.configure(
             'TNotebook',
             background=self.COLORS['bg'],
+            bordercolor=self.COLORS['border'],
+            darkcolor=self.COLORS['border'],
+            lightcolor=self.COLORS['border'],
             tabmargins=[2, 5, 2, 0]
         )
         
         self.style.configure(
             'TNotebook.Tab',
             background=self.COLORS['secondary'],
+            foreground=self.COLORS['text'],
             font=('Segoe UI', 10),
-            padding=[15, 5]
+            padding=[15, 5],
+            bordercolor=self.COLORS['border']
         )
         
         self.style.configure(
             'TFrame',
-            background=self.COLORS['bg']
+            background=self.COLORS['bg'],
+            bordercolor=self.COLORS['border'],
+            darkcolor=self.COLORS['border'],
+            lightcolor=self.COLORS['border']
         )
         
         self.style.configure(
@@ -126,6 +147,88 @@ class QuickbaseArchiveApp(tk.Tk):
             thickness=20                             # Thicker bar
         )
 
+        # Configure LabelFrame style
+        self.style.configure(
+            'Custom.TLabelframe',
+            background=self.COLORS['bg'],
+            bordercolor=self.COLORS['border'],  # Lighter border
+            darkcolor=self.COLORS['border'],    # Consistent border color
+            lightcolor=self.COLORS['border']    # Consistent border color
+        )
+
+        # Configure LabelFrame.Label style (for the "Credentials" text)
+        self.style.configure(
+            'Custom.TLabelframe.Label',
+            background=self.COLORS['bg'],
+            foreground=self.COLORS['text'],  # White text
+            font=('Segoe UI', 10, 'bold')
+        )
+
+        # Update the Toggle button style for better visibility
+        self.style.configure(
+            'Toggle.TButton',
+            background=self.COLORS['secondary'],
+            foreground=self.COLORS['text'],  # White text
+            font=('Segoe UI', 8),
+            padding=2,
+            bordercolor=self.COLORS['border']
+        )
+
+        # Add hover effect for Toggle buttons
+        self.style.map('Toggle.TButton',
+            background=[('active', self.COLORS['primary'])],
+            foreground=[('active', self.COLORS['text'])]
+        )
+
+        # Update all remaining border colors
+        self.style.configure('TSeparator',
+            background=self.COLORS['separator']
+        )
+
+        self.style.configure('TFrame',
+            background=self.COLORS['bg'],
+            bordercolor=self.COLORS['border'],
+            darkcolor=self.COLORS['border'],
+            lightcolor=self.COLORS['border']
+        )
+
+        # Update button borders
+        self.style.configure('TButton',
+            bordercolor=self.COLORS['border'],
+            darkcolor=self.COLORS['border'],
+            lightcolor=self.COLORS['border']
+        )
+
+        self.style.configure('Accent.TButton',
+            bordercolor=self.COLORS['primary'],
+            darkcolor=self.COLORS['primary'],
+            lightcolor=self.COLORS['primary']
+        )
+
+        # Update scrollbar style
+        self.style.configure('Vertical.TScrollbar',
+            background=self.COLORS['secondary'],
+            bordercolor=self.COLORS['border'],
+            arrowcolor=self.COLORS['text'],
+            troughcolor=self.COLORS['bg']
+        )
+
+        self.style.configure('Horizontal.TScrollbar',
+            background=self.COLORS['secondary'],
+            bordercolor=self.COLORS['border'],
+            arrowcolor=self.COLORS['text'],
+            troughcolor=self.COLORS['bg']
+        )
+
+        # Update scrollbar mapping for hover effects
+        self.style.map('Vertical.TScrollbar',
+            background=[('active', self.COLORS['primary'])]
+        )
+
+        self.style.map('Horizontal.TScrollbar',
+            background=[('active', self.COLORS['primary'])]
+        )
+
         # Create and pack the main container
         self.main_container = ttk.Frame(self)
         self.main_container.pack(expand=True, fill="both", padx=20, pady=20)
@@ -158,13 +261,27 @@ class QuickbaseArchiveApp(tk.Tk):
         cred_frame = ttk.LabelFrame(
             self.main_container,
             text="Credentials",
-            padding=15
+            padding=15,
+            style='Custom.TLabelframe'
         )
         cred_frame.pack(fill="x", pady=(0, 10))
 
         # Streamlined credentials setup
         self.shared_entries = {}
         self.show_buttons = {}  # Store show/hide buttons
+        
+        # Configure entry style before creating entries
+        self.style.configure(
+            'TEntry',
+            fieldbackground=self.COLORS['secondary'],
+            foreground=self.COLORS['text'],
+            bordercolor=self.COLORS['border'],
+            darkcolor=self.COLORS['border'],
+            lightcolor=self.COLORS['border'],
+            selectbackground=self.COLORS['primary'],
+            selectforeground=self.COLORS['text']
+        )
+
         shared_fields = [
             ("AWS Access Key:", "aws_access_key", False, "AKIAXR5GICGZ6SD2QUXY"),
             ("AWS Secret Key:", "aws_secret_key", True, "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"),
@@ -213,6 +330,15 @@ class QuickbaseArchiveApp(tk.Tk):
                 self.show_buttons[field_key] = (show_button, show_var)
 
         cred_frame.columnconfigure(1, weight=1)
+        
+        # Update entry borders after creating them
+        for entry in self.shared_entries.values():
+            entry.configure(
+                highlightbackground=self.COLORS['border'],
+                highlightcolor=self.COLORS['primary'],
+                highlightthickness=1,
+                bd=0
+            )
 
     def toggle_show_password(self, entry_widget, show_var):
         """Toggle between showing and hiding the password"""
